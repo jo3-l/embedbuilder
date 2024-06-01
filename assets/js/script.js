@@ -4,6 +4,115 @@
  * https://github.com/Glitchii/embedbuilder
  */
 
+
+class YagTemplateCodePrinter {
+    constructor() {
+        this._buf = [''];
+        this._indentLevel = 0;
+    }
+
+    getCode() {
+        return this._buf.join('\n');
+    }
+
+    writeFormatted(v) {
+        switch (typeof v) {
+            case 'string':
+                return this.writeQuotedString(v);
+            case 'number':
+                return this.writeNumber(v);
+            case 'boolean':
+                return this.writeBoolean(v); 
+            case 'object':
+                if (Array.isArray(v)) return this.writeArray(v);
+                return this.writeObject(v);
+            default:
+                throw new TypeError(`unexpected value ${v}`);
+        }
+    }
+
+    writeQuotedString(s) {
+        this.write(JSON.stringify(s));
+    }
+
+    writeNumber(n) {
+        this.write(n.toString());
+    }
+
+    writeBoolean(b) {
+        this.write(b.toString());
+    }
+
+    writeArray(arr) {
+        this.write('(cslice');
+        this.newLine();
+        this.withIndent(() => {
+            for (const v of arr) {
+                this.writeFormatted(v);
+                this.newLine();
+            }
+        });
+        this.write(')');
+    }
+
+    writeObject(obj, functionName = 'sdict') {
+        this.write(`(${functionName}`);
+        this.newLine();
+        this.withIndent(() => {
+            for (const [key, value] of Object.entries(obj)) {
+                this.writeFormatted(key);
+                this.write(' ');
+                this.writeFormatted(value);
+                this.newLine();
+            }
+        })
+        this.write(')');
+    }
+
+    write(s) {
+        if (this._buf.at(-1) === '') {
+            this._buf[this._buf.length - 1] += '\t'.repeat(this._indentLevel);
+        }
+        this._buf[this._buf.length - 1] += s;
+    }
+
+    newLine() {
+        this._buf.push('');
+    }
+
+    withIndent(f) {
+        this._indentLevel++;
+        f();
+        this._indentLevel--;
+    }
+}
+
+function generateYagTmplCode(messageJson) {
+    const hasContent = messageJson.content !== '';
+    const hasEmbed = 'embed' in messageJson;
+
+    const p = new YagTemplateCodePrinter();
+    p.write(`{{ sendMessage nil (complexMessage`);
+    p.newLine();
+    p.withIndent(() => {
+        if (hasContent) {
+            p.writeQuotedString('content');
+            p.write(' ');
+            p.writeQuotedString(messageJson.content);
+            if (hasEmbed) p.newLine();
+        }
+        
+        if (hasEmbed) {
+            p.writeQuotedString('embed');
+            p.write(' ');
+            p.writeObject(messageJson.embed, 'cembed');
+        }
+        p.newLine();
+    });
+    p.write(') }}');
+    return p.getCode();
+}
+
 window.options ??= {};
 window.inIframe ??= top !== self;
 mainHost = "glitchii.github.io";
@@ -22,7 +131,7 @@ let params = new URLSearchParams(location.search),
     allowPlaceholders = hasParam('placeholders') || options.allowPlaceholders,
     autoUpdateURL = localStorage.getItem('autoUpdateURL') || options.autoUpdateURL,
     noMultiEmbedsOption = localStorage.getItem('noMultiEmbedsOption') || hasParam('nomultiembedsoption') || options.noMultiEmbedsOption,
-    single = noMultiEmbedsOption ? options.single ?? true : (localStorage.getItem('single') || hasParam('single') || options.single) ?? false,
+    single = /* noMultiEmbedsOption ? options.single ?? true : (localStorage.getItem('single') || hasParam('single') || options.single) ?? false */ true,
     multiEmbeds = !single,
     autoParams = localStorage.getItem('autoParams') || hasParam('autoparams') || options.autoParams,
     hideEditor = localStorage.getItem('hideeditor') || hasParam('hideeditor') || options.hideEditor,
@@ -336,31 +445,13 @@ addEventListener('DOMContentLoaded', () => {
         gui = guiParent.querySelector('.gui:first-of-type');
 
     editor = CodeMirror(elt => editorHolder.parentNode.replaceChild(elt, editorHolder), {
-        value: JSON.stringify(json, null, 4),
+        value: generateYagTmplCode(json),
         gutters: ["CodeMirror-foldgutter", "CodeMirror-lint-markers"],
         scrollbarStyle: "overlay",
-        mode: "application/json",
         theme: 'material-darker',
         matchBrackets: true,
         foldGutter: true,
-        lint: true,
-        extraKeys: {
-            // Fill in indent spaces on a new line when enter (return) key is pressed.
-            Enter: _ => {
-                const cursor = editor.getCursor();
-                const end = editor.getLine(cursor.line);
-                const leadingSpaces = end.replace(/\S($|.)+/g, '') || '    \n';
-                const nextLine = editor.getLine(cursor.line + 1);
-
-                if ((nextLine === undefined || !nextLine.trim()) && !end.substr(cursor.ch).trim())
-                    editor.replaceRange('\n', { line: cursor.line, ch: cursor.ch });
-                else
-                    editor.replaceRange(`\n${end.endsWith('{') ? leadingSpaces + '    ' : leadingSpaces}`, {
-                        line: cursor.line,
-                        ch: cursor.ch
-                    });
-            },
-        }
+        readOnly: true,
     });
 
     editor.focus();
@@ -1142,39 +1233,6 @@ addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    editor.on('change', editor => {
-        // If the editor value is not set by the user, return.
-        if (JSON.stringify(json, null, 4) === editor.getValue()) return;
-
-        try {
-            // Autofill when " is typed on new line
-            const line = editor.getCursor().line;
-            const text = editor.getLine(line)
-
-            if (text.trim() === '"') {
-                editor.replaceRange(text.trim() + ':', { line, ch: line.length });
-                editor.setCursor(line, text.length)
-            }
-
-            json = JSON.parse(editor.getValue());
-            const dataKeys = Object.keys(json);
-
-            if (dataKeys.length && !allJsonKeys.some(key => dataKeys.includes(key))) {
-                const usedKeys = dataKeys.filter(key => !allJsonKeys.includes(key));
-                if (usedKeys.length > 2)
-                    return error(`'${usedKeys[0] + "', '" + usedKeys.slice(1, usedKeys.length - 1).join("', '")}', and '${usedKeys[usedKeys.length - 1]}' are invalid keys.`);
-                return error(`'${usedKeys.length == 2 ? usedKeys[0] + "' and '" + usedKeys[usedKeys.length - 1] + "' are invalid keys." : usedKeys[0] + "' is an invalid key."}`);
-            }
-
-            buildEmbed();
-
-        } catch (e) {
-            if (editor.getValue()) return;
-            document.body.classList.add('emptyEmbed');
-            embedContent.innerHTML = '';
-        }
-    });
-
     const picker = new CP(document.querySelector('.picker'), state = { parent: document.querySelector('.cTop') });
 
     picker.fire?.('change', toRGB('#41f097'));
@@ -1264,7 +1322,7 @@ addEventListener('DOMContentLoaded', () => {
         lastGuiJson = jsonStr;
 
         document.body.classList.remove('gui');
-        editor.setValue(jsonStr === '{}' ? '{\n\t\n}' : jsonStr);
+        editor.setValue(generateYagTmplCode(json));
         editor.refresh();
         editor.focus();
 
@@ -1282,8 +1340,7 @@ addEventListener('DOMContentLoaded', () => {
         buildEmbed();
         buildGui();
 
-        const jsonStr = JSON.stringify(json, null, 4);
-        editor.setValue(jsonStr === '{}' ? '{\n\t\n}' : jsonStr);
+        editor.setValue(generateYagTmplCode(json));
 
         for (const e of document.querySelectorAll('.gui .item'))
             e.classList.add('active');
@@ -1363,7 +1420,7 @@ addEventListener('DOMContentLoaded', () => {
 
             buildGui();
             buildEmbed();
-            editor.setValue(JSON.stringify(json, null, 4));
+            editor.setValue(generateYagTmplCode(json));
         }
 
         e.target.closest('.top-btn')?.classList.toggle('active')

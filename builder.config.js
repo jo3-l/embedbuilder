@@ -8,9 +8,9 @@
 // URL options can override the options below.
 // Options set through the menu can override both until the page is refreshed.
 options = {
-    username: 'Discord Bot',
-    avatar: 'https://cdn.discordapp.com/embed/avatars/1.png',
-    verified: false,
+    username: 'YAGPDB.xyz',
+    avatar: 'https://yagpdb.xyz/static/img/logo_y.png',
+    verified: true,
     noUser: false,
     data: null,
     guiTabs: ['author', 'description'],
@@ -22,26 +22,6 @@ options = {
     hideEditor: false,
     hidePreview: false,
     hideMenu: false,
-    single: false,
     noMultiEmbedsOption: false,
     sourceOption: false, // Display link to source code in menu.
 }
-
-// Default JSON object
-
-// json = {
-//     content: "Hello world",
-//     embed: {
-//         title: "A title",
-//         description: "A description",
-//     }
-// }
-
-
-// Write any code under the 'DOMContentLoaded' event to run after the page has loaded.
-addEventListener('DOMContentLoaded', () => {
-    // console.log('Hello 👋');
-
-    // Remove the colour picker
-    // document.querySelector('.colors').remove()
-})
