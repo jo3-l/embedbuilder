@@ -1478,7 +1478,7 @@ addEventListener('DOMContentLoaded', () => {
 
     document.querySelector('.top-btn.copy').addEventListener('click', e => {
         const mark = e.target.closest('.top-btn.copy').querySelector('.mark'),
-            jsonData = JSON.stringify(json, null, 4),
+            jsonData = generateYagTmplCode(json),
             next = () => {
                 mark?.classList.remove('hidden');
                 mark?.previousElementSibling?.classList.add('hidden');
