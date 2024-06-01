@@ -1,3 +1,7 @@
+Fork of https://github.com/Glitchii/embedbuilder that generates YAGPDB template code instead; original project description below.
+
+---
+
 # An embed visualizer
 
 Visualize embed or message content from JSON input or provided GUI editor.
