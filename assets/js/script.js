@@ -88,8 +88,8 @@ class YagTemplateCodePrinter {
 }
 
 function generateYagTmplCode(messageJson) {
-    const hasContent = messageJson.content !== '';
-    const hasEmbed = 'embed' in messageJson;
+    const hasContent = Boolean(messageJson.content);
+    const hasEmbed = Boolean(messageJson.embed);
 
     const p = new YagTemplateCodePrinter();
     p.write(`{{ sendMessage nil (complexMessage`);
